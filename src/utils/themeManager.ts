@@ -1,3 +1,5 @@
+import { saveThemeConfigToFirebase, subscribeToThemeConfig } from '../lib/firebase';
+
 export interface ThemePreset {
   id: string;
   name: string;
@@ -277,6 +279,7 @@ export function setActiveTheme(themeId: string): ThemePreset {
   }
   applyThemeToDOM(theme);
   window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: theme }));
+  saveThemeConfigToFirebase(theme.id).catch(() => {});
   return theme;
 }
 
@@ -881,6 +884,30 @@ export function onThemeChange(callback: (theme: ThemePreset) => void): () => voi
   };
   window.addEventListener(THEME_CHANGE_EVENT, handler);
   return () => window.removeEventListener(THEME_CHANGE_EVENT, handler);
+}
+
+/**
+ * Start real-time Firestore sync for Visual Theme across all devices
+ */
+export function startRealtimeThemeSync(): () => void {
+  return subscribeToThemeConfig((remoteThemeId) => {
+    if (!remoteThemeId) return;
+    const currentTheme = getActiveTheme();
+    if (currentTheme.id !== remoteThemeId) {
+      const found = THEME_PRESETS.find((t) => t.id === remoteThemeId);
+      if (found) {
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, found.id);
+        } catch {
+          // ignore
+        }
+        applyThemeToDOM(found);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: found }));
+        }
+      }
+    }
+  });
 }
 
 // Auto-run applyThemeToDOM immediately on file evaluation if in browser

@@ -3,6 +3,8 @@
  * Manages 20 curated presets and custom manual backgrounds (file upload, custom URL, gradient builder)
  */
 
+import { saveBackgroundConfigToFirebase, subscribeToBackgroundConfig } from '../lib/firebase';
+
 export interface AppBackground {
   id: string;
   name: string;
@@ -309,6 +311,7 @@ export function setActiveBackground(bg: AppBackground): void {
   }
   applyBackgroundToDOM(bg);
   window.dispatchEvent(new CustomEvent(BACKGROUND_CHANGE_EVENT, { detail: bg }));
+  saveBackgroundConfigToFirebase(bg).catch(() => {});
 }
 
 /**
@@ -467,6 +470,42 @@ export function onBackgroundChange(callback: (bg: AppBackground) => void): () =>
   };
   window.addEventListener(BACKGROUND_CHANGE_EVENT, handler);
   return () => window.removeEventListener(BACKGROUND_CHANGE_EVENT, handler);
+}
+
+/**
+ * Start real-time Firestore sync for Background Wallpaper across all devices
+ */
+export function startRealtimeBackgroundSync(): () => void {
+  return subscribeToBackgroundConfig((remoteBg) => {
+    if (!remoteBg || !remoteBg.id || !remoteBg.cssValue) return;
+    const current = getActiveBackground();
+    if (
+      current.id !== remoteBg.id ||
+      current.cssValue !== remoteBg.cssValue ||
+      current.overlayOpacity !== remoteBg.overlayOpacity ||
+      current.blur !== remoteBg.blur
+    ) {
+      const newBg: AppBackground = {
+        id: remoteBg.id,
+        name: remoteBg.name || 'Latar Belakang RSIA',
+        category: (remoteBg.category as any) || 'Rumah Sakit & Klinis',
+        type: (remoteBg.type as any) || 'preset',
+        cssValue: remoteBg.cssValue,
+        thumbnailUrl: remoteBg.thumbnailUrl,
+        overlayOpacity: typeof remoteBg.overlayOpacity === 'number' ? remoteBg.overlayOpacity : 0.8,
+        blur: typeof remoteBg.blur === 'number' ? remoteBg.blur : 0
+      };
+      try {
+        localStorage.setItem(ACTIVE_BACKGROUND_STORAGE_KEY, JSON.stringify(newBg));
+      } catch {
+        // ignore
+      }
+      applyBackgroundToDOM(newBg);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(BACKGROUND_CHANGE_EVENT, { detail: newBg }));
+      }
+    }
+  });
 }
 
 // Auto-run on script evaluation

@@ -103,12 +103,16 @@ export const DEFAULT_EMPLOYEES: EmployeeItem[] = [
   }
 ];
 
+let initialEmployeesCloudSynced = false;
+
 export function getAllEmployees(): EmployeeItem[] {
   let savedEmployees: EmployeeItem[] = [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       savedEmployees = JSON.parse(raw);
+    } else if (initialEmployeesCloudSynced) {
+      savedEmployees = [];
     } else {
       savedEmployees = [...DEFAULT_EMPLOYEES];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(savedEmployees));
@@ -268,8 +272,6 @@ export function onEmployeesChange(callback: (employees?: EmployeeItem[]) => void
   window.addEventListener(EMPLOYEES_CHANGE_EVENT, handler);
   return () => window.removeEventListener(EMPLOYEES_CHANGE_EVENT, handler);
 }
-
-let initialEmployeesCloudSynced = false;
 
 /**
  * Start real-time Firestore sync for master employees directory

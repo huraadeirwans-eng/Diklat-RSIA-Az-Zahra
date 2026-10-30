@@ -2,11 +2,16 @@ import { AppAccount, User, getUserAuthority } from '../types/auth';
 import { 
   saveAccountToFirebase, 
   deleteAccountFromFirebase, 
+  bulkDeleteAccountsFromFirebase,
   bulkUploadAccountsToFirebase,
-  subscribeToAccounts 
+  subscribeToAccounts,
+  getDeletedAccountTombstones,
+  clearDeletedAccountsTracking,
+  removeAccountsFromDeletedTombstones
 } from '../lib/firebase';
 
 export const ACCOUNTS_STORAGE_KEY = 'simrs_diklat_accounts_v2';
+export const ACCOUNTS_CHANGE_EVENT = 'simrs-accounts-changed';
 export const OTP_STORAGE_KEY = 'simrs_diklat_active_otps';
 export const LATEST_OTP_KEY = 'simrs_diklat_latest_otp';
 
@@ -43,7 +48,6 @@ export const DESIGNATED_RECOVERY_EMAILS = [
 ];
 
 export const DEFAULT_ACCOUNTS: AppAccount[] = [
-
   {
     id: 'usr-admin-01',
     username: 'admin',
@@ -84,6 +88,19 @@ export const DEFAULT_ACCOUNTS: AppAccount[] = [
     isDefault: true
   },
   {
+    id: 'usr-struk-05',
+    username: 'struktural',
+    password: 'diklat2026',
+    name: 'Ns. Hendra Wijaya, S.Kep, M.Kep (Kabid Keperawatan)',
+    role: 'Nursing Struktural',
+    authority: 'Edit',
+    nip: '19870425 201201 1 004',
+    unit: 'Bidang Pelayanan Keperawatan & Kebidanan',
+    email: 'nursing.struktural@hospital.corp.id',
+    createdAt: '2026-03-20T08:00:00.000Z',
+    isDefault: true
+  },
+  {
     id: 'usr-view-04',
     username: 'peserta',
     password: 'diklat2026',
@@ -98,7 +115,6 @@ export const DEFAULT_ACCOUNTS: AppAccount[] = [
   }
 ];
 
-
 // Account real-time sync listeners
 type AccountListener = (accounts: AppAccount[]) => void;
 const accountListeners: Set<AccountListener> = new Set();
@@ -110,6 +126,25 @@ export function onAccountsSync(listener: AccountListener): () => void {
   };
 }
 
+export function onAccountsChange(listener: AccountListener): () => void {
+  accountListeners.add(listener);
+  const handler = (e: Event) => {
+    const custom = e as CustomEvent<AppAccount[]>;
+    if (Array.isArray(custom.detail)) {
+      listener(custom.detail);
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener(ACCOUNTS_CHANGE_EVENT, handler);
+  }
+  return () => {
+    accountListeners.delete(listener);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(ACCOUNTS_CHANGE_EVENT, handler);
+    }
+  };
+}
+
 let hasStartedAccountSync = false;
 export function startRealtimeAccountSync(): () => void {
   if (hasStartedAccountSync) return () => {};
@@ -117,29 +152,45 @@ export function startRealtimeAccountSync(): () => void {
 
   return subscribeToAccounts(
     (remoteAccounts) => {
-      if (remoteAccounts && remoteAccounts.length > 0) {
-        saveStoredAccounts(remoteAccounts);
-        accountListeners.forEach((fn) => {
-          try {
-            fn(remoteAccounts);
-          } catch (e) {
-            console.warn('Error in account sync listener:', e);
-          }
-        });
+      const { ids: deletedIds, usernames: deletedUsernames } = getDeletedAccountTombstones();
+      const cleanRemote = Array.isArray(remoteAccounts)
+        ? remoteAccounts.filter(
+            (acc) => !deletedIds.has(acc.id) && !deletedUsernames.has((acc.username || '').trim().toLowerCase())
+          )
+        : [];
+
+      saveStoredAccounts(cleanRemote);
+      accountListeners.forEach((fn) => {
+        try {
+          fn(cleanRemote);
+        } catch (e) {
+          console.warn('Error in account sync listener:', e);
+        }
+      });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: cleanRemote }));
       }
     }
   );
 }
 
 export function getStoredAccounts(): AppAccount[] {
+  const { ids: deletedIds, usernames: deletedUsernames } = getDeletedAccountTombstones();
+
   try {
     const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure designated emails, administrator names, and explicit authorities are synchronized
-        let hasChanges = false;
-        const synced = parsed.map((acc: AppAccount) => {
+        // Filter out any tombstoned/deleted accounts
+        const aliveAccounts = parsed.filter((acc: AppAccount) => {
+          const id = acc.id;
+          const u = (acc.username || '').trim().toLowerCase();
+          return !deletedIds.has(id) && !deletedUsernames.has(u);
+        });
+
+        let hasChanges = aliveAccounts.length !== parsed.length;
+        const synced = aliveAccounts.map((acc: AppAccount) => {
           let updatedAcc = { ...acc };
           if (!updatedAcc.authority) {
             updatedAcc.authority = getUserAuthority(updatedAcc);
@@ -157,19 +208,23 @@ export function getStoredAccounts(): AppAccount[] {
           }
           return updatedAcc;
         });
+
         if (hasChanges) {
           saveStoredAccounts(synced);
         }
         return synced;
       }
-
     }
   } catch (err) {
     console.error('Failed to load accounts from storage:', err);
   }
-  // Initialize storage with defaults
-  saveStoredAccounts(DEFAULT_ACCOUNTS);
-  return DEFAULT_ACCOUNTS;
+
+  // Filter default accounts against tombstones before seeding
+  const initialAvailable = DEFAULT_ACCOUNTS.filter(
+    (acc) => !deletedIds.has(acc.id) && !deletedUsernames.has(acc.username.trim().toLowerCase())
+  );
+  saveStoredAccounts(initialAvailable);
+  return initialAvailable;
 }
 
 export function saveStoredAccounts(accounts: AppAccount[]): void {
@@ -217,7 +272,18 @@ export function addAccount(
 
   const updatedAccounts = [newAccount, ...accounts];
   saveStoredAccounts(updatedAccounts);
-  // Asynchronously sync to Firebase backend
+  accountListeners.forEach((fn) => {
+    try {
+      fn(updatedAccounts);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: updatedAccounts }));
+  }
+
+  // Asynchronously sync to Firebase backend (also un-tombstones if previously deleted)
   saveAccountToFirebase(newAccount).catch(() => {});
 
   return {
@@ -258,6 +324,17 @@ export function updateAccount(
 
   accounts[index] = updated;
   saveStoredAccounts(accounts);
+  accountListeners.forEach((fn) => {
+    try {
+      fn(accounts);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: accounts }));
+  }
+
   saveAccountToFirebase(updated).catch(() => {});
 
   return { success: true, message: `Data akun @${updated.username} berhasil diperbarui.`, account: updated };
@@ -280,6 +357,17 @@ export function updateAccountAvatar(
   };
   accounts[index] = updated;
   saveStoredAccounts(accounts);
+  accountListeners.forEach((fn) => {
+    try {
+      fn(accounts);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: accounts }));
+  }
+
   saveAccountToFirebase(updated).catch(() => {});
   return { success: true, message: 'Foto profil berhasil diperbarui.', account: updated };
 }
@@ -301,6 +389,17 @@ export function resetAccountPassword(
 
   accounts[index].password = newPassword;
   saveStoredAccounts(accounts);
+  accountListeners.forEach((fn) => {
+    try {
+      fn(accounts);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: accounts }));
+  }
+
   saveAccountToFirebase(accounts[index]).catch(() => {});
 
   return {
@@ -323,13 +422,79 @@ export function deleteAccount(id: string): { success: boolean; message: string }
 
   const filtered = accounts.filter((a) => a.id !== id);
   saveStoredAccounts(filtered);
-  deleteAccountFromFirebase(id).catch(() => {});
+
+  // Dispatch local notifications immediately
+  accountListeners.forEach((fn) => {
+    try {
+      fn(filtered);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: filtered }));
+  }
+
+  // Record tombstone and delete from Firebase
+  deleteAccountFromFirebase(id, account.username).catch(() => {});
 
   return { success: true, message: `Akun @${account.username} berhasil dihapus dari sistem.` };
 }
 
+export function bulkDeleteAccounts(ids: string[]): { success: boolean; count: number; message: string } {
+  if (!ids || ids.length === 0) {
+    return { success: false, count: 0, message: 'Tidak ada akun yang dipilih untuk dihapus.' };
+  }
+
+  const accounts = getStoredAccounts();
+  const idSet = new Set(ids);
+  
+  // Exclude admin from deletion
+  const targets = accounts.filter((a) => idSet.has(a.id) && a.username !== 'admin');
+  if (targets.length === 0) {
+    return { success: false, count: 0, message: 'Akun yang dipilih tidak dapat dihapus.' };
+  }
+
+  const validIds = targets.map((t) => t.id);
+  const targetUsernames = targets.map((t) => t.username);
+  const validIdSet = new Set(validIds);
+
+  const filtered = accounts.filter((a) => !validIdSet.has(a.id));
+  saveStoredAccounts(filtered);
+
+  accountListeners.forEach((fn) => {
+    try {
+      fn(filtered);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: filtered }));
+  }
+
+  bulkDeleteAccountsFromFirebase(validIds, targetUsernames).catch(() => {});
+
+  return { 
+    success: true, 
+    count: validIds.length, 
+    message: `${validIds.length} akun pengguna berhasil dihapus permanen dari sistem.` 
+  };
+}
+
 export function resetAccountsToDefault(): AppAccount[] {
+  clearDeletedAccountsTracking().catch(() => {});
   saveStoredAccounts(DEFAULT_ACCOUNTS);
+  accountListeners.forEach((fn) => {
+    try {
+      fn(DEFAULT_ACCOUNTS);
+    } catch (e) {
+      console.warn('Listener notice:', e);
+    }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCOUNTS_CHANGE_EVENT, { detail: DEFAULT_ACCOUNTS }));
+  }
   bulkUploadAccountsToFirebase(DEFAULT_ACCOUNTS).catch(() => {});
   return DEFAULT_ACCOUNTS;
 }

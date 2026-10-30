@@ -1,18 +1,18 @@
 /**
  * Firebase Config and Fallback
- * Synchronized with official AI Studio project configuration (sigma-cursor-q8p5g)
- * and custom database ID (ai-studio-kalenderpelatiha-5ccadc93-9bf1-4540-be82-c06cf4397bb9).
+ * Synchronized with active Cloud Firestore database: ai-studio-kalenderpelatiha-a2e67a57-c27f-4034-b499-553b963a5825
+ * under project: gen-lang-client-0189345046
  */
 export const DEFAULT_FIREBASE_CONFIG = {
-  projectId: "advance-rex-66tvw",
-  appId: "1:43024800091:web:e4b111519b5bcf8589227e",
-  apiKey: "AIzaSyCEokxgYNExV9KsGa-bdXlrvSv4ecUremI",
-  authDomain: "advance-rex-66tvw.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-kalenderpelatiha-7b7b5e7b-c424-4fe2-ba2d-e6af4e592184",
-  storageBucket: "advance-rex-66tvw.firebasestorage.app",
-  messagingSenderId: "43024800091",
+  projectId: "gen-lang-client-0189345046",
+  appId: "1:478431102255:web:783e4bec8bb02a117d4dda",
+  apiKey: "AIzaSyAO7TQhdJ7Atih3B0YiXX90POp0ZUA1Zi8",
+  authDomain: "gen-lang-client-0189345046.firebaseapp.com",
+  firestoreDatabaseId: "ai-studio-kalenderpelatiha-a2e67a57-c27f-4034-b499-553b963a5825",
+  storageBucket: "gen-lang-client-0189345046.firebasestorage.app",
+  messagingSenderId: "478431102255",
   measurementId: "",
-  oAuthClientId: "43024800091-b2leb1hs5kbuuait320lntc7n9fk9356.apps.googleusercontent.com",
+  oAuthClientId: "478431102255-j85atoan0r9erjsrhsqek76qah747tnj.apps.googleusercontent.com",
   recaptchaSiteKey: ""
 };
 

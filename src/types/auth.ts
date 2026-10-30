@@ -4,7 +4,7 @@ export interface User {
   id: string;
   username: string;
   name: string;
-  role: 'Administrator Diklat' | 'Koordinator Preceptor' | 'Instruktur Klinis' | 'Peserta Diklat' | string;
+  role: 'Administrator Diklat' | 'Koordinator Preceptor' | 'Instruktur Klinis' | 'Nursing Struktural' | 'Peserta Diklat' | string;
   authority?: UserAuthority;
   nip: string;
   unit: string;
@@ -17,7 +17,7 @@ export interface AppAccount {
   username: string;
   password: string;
   name: string;
-  role: 'Administrator Diklat' | 'Koordinator Preceptor' | 'Instruktur Klinis' | 'Peserta Diklat' | string;
+  role: 'Administrator Diklat' | 'Koordinator Preceptor' | 'Instruktur Klinis' | 'Nursing Struktural' | 'Peserta Diklat' | string;
   authority?: UserAuthority;
   nip: string;
   unit: string;

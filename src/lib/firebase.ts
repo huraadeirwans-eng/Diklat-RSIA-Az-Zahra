@@ -93,14 +93,14 @@ export function cleanFirestoreData<T>(obj: T): T {
  * under Google Cloud project: melodic-pattern-dpthm
  */
 export const firebaseConfig = {
-  apiKey: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_API_KEY) || appletConfig.apiKey || DEFAULT_FIREBASE_CONFIG.apiKey,
-  authDomain: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN) || appletConfig.authDomain || DEFAULT_FIREBASE_CONFIG.authDomain,
-  projectId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) || appletConfig.projectId || DEFAULT_FIREBASE_CONFIG.projectId,
-  storageBucket: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET) || appletConfig.storageBucket || DEFAULT_FIREBASE_CONFIG.storageBucket,
-  messagingSenderId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID) || appletConfig.messagingSenderId || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
-  appId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_APP_ID) || appletConfig.appId || DEFAULT_FIREBASE_CONFIG.appId,
-  measurementId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID) || appletConfig.measurementId || DEFAULT_FIREBASE_CONFIG.measurementId || '',
-  firestoreDatabaseId: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_DATABASE_ID) || appletConfig.firestoreDatabaseId || DEFAULT_FIREBASE_CONFIG.firestoreDatabaseId
+  apiKey: appletConfig.apiKey || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_API_KEY) || DEFAULT_FIREBASE_CONFIG.apiKey,
+  authDomain: appletConfig.authDomain || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN) || DEFAULT_FIREBASE_CONFIG.authDomain,
+  projectId: appletConfig.projectId || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) || DEFAULT_FIREBASE_CONFIG.projectId,
+  storageBucket: appletConfig.storageBucket || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET) || DEFAULT_FIREBASE_CONFIG.storageBucket,
+  messagingSenderId: appletConfig.messagingSenderId || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID) || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+  appId: appletConfig.appId || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_APP_ID) || DEFAULT_FIREBASE_CONFIG.appId,
+  measurementId: appletConfig.measurementId || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID) || DEFAULT_FIREBASE_CONFIG.measurementId || '',
+  firestoreDatabaseId: appletConfig.firestoreDatabaseId || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_DATABASE_ID) || DEFAULT_FIREBASE_CONFIG.firestoreDatabaseId
 };
 
 // Initialize Firebase App safely as a singleton
@@ -109,8 +109,11 @@ let dbInstance: ReturnType<typeof getFirestore> | null = null;
 
 try {
   appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  // Pass explicit database ID for enterprise/custom named Firestore instances
-  dbInstance = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
+  // Pass explicit database ID for enterprise/custom named instances, or default for standard instances
+  const customDbId = firebaseConfig.firestoreDatabaseId;
+  dbInstance = customDbId && customDbId !== '(default)'
+    ? getFirestore(appInstance, customDbId)
+    : getFirestore(appInstance);
 } catch (e) {
   console.warn('Firebase initialization warning (running in offline fallback mode):', e);
 }
@@ -260,12 +263,30 @@ export function subscribeToTrainings(
             remoteList.push({ ...(docSnap.data() as Training), id: docSnap.id });
           });
           onUpdate(remoteList);
+          // Mark system as initialized so subsequent devices never resurrect demo data
+          const metaDocRef = doc(db, SETTINGS_COLLECTION, 'system_seed_status');
+          setDoc(metaDocRef, { trainingsSeeded: true }, { merge: true }).catch(() => {});
         } else {
           // If cloud collection is completely empty:
           if (!initialCloudChecked) {
             initialCloudChecked = true;
-            bulkUploadTrainingsToFirebase([USER_REAL_TRAINING]).catch(() => {});
-            onUpdate([USER_REAL_TRAINING]);
+            // Verify if cloud was already initialized before deciding to seed
+            const metaDocRef = doc(db, SETTINGS_COLLECTION, 'system_seed_status');
+            getDocFromServer(metaDocRef)
+              .then((snap) => {
+                if (snap.exists() && snap.data()?.trainingsSeeded) {
+                  // Legitimate empty state: user cleared all trainings
+                  onUpdate([]);
+                } else {
+                  // Clean first-time initialization of brand new database
+                  bulkUploadTrainingsToFirebase([USER_REAL_TRAINING]).catch(() => {});
+                  setDoc(metaDocRef, { trainingsSeeded: true }, { merge: true }).catch(() => {});
+                  onUpdate([USER_REAL_TRAINING]);
+                }
+              })
+              .catch(() => {
+                onUpdate([]);
+              });
           } else {
             // Legitimate remote deletion of all records
             onUpdate([]);
@@ -349,9 +370,114 @@ export async function bulkUploadTrainingsToFirebase(trainings: Training[]): Prom
   }
 }
 
+export const DELETED_ACCOUNTS_DOC = 'deleted_accounts';
+export const DELETED_ACCOUNTS_KEY = 'rsia_diklat_deleted_accounts_v1';
+
+export function getDeletedAccountTombstones(): { ids: Set<string>; usernames: Set<string> } {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(DELETED_ACCOUNTS_KEY) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ids: new Set(Array.isArray(parsed?.ids) ? parsed.ids : []),
+        usernames: new Set(
+          Array.isArray(parsed?.usernames) 
+            ? parsed.usernames.map((u: string) => String(u).trim().toLowerCase()) 
+            : []
+        )
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return { ids: new Set(), usernames: new Set() };
+}
+
+export function saveDeletedAccountTombstonesLocally(ids: Set<string>, usernames: Set<string>): void {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        DELETED_ACCOUNTS_KEY,
+        JSON.stringify({
+          ids: Array.from(ids),
+          usernames: Array.from(usernames)
+        })
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export async function markAccountsAsDeletedInFirebase(ids: string[], usernames: string[] = []): Promise<void> {
+  const current = getDeletedAccountTombstones();
+  ids.forEach((id) => {
+    if (id) current.ids.add(id);
+  });
+  usernames.forEach((u) => {
+    if (u) current.usernames.add(String(u).trim().toLowerCase());
+  });
+  saveDeletedAccountTombstonesLocally(current.ids, current.usernames);
+
+  if (!db) return;
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, DELETED_ACCOUNTS_DOC);
+    await setDoc(
+      docRef,
+      {
+        ids: Array.from(current.ids),
+        usernames: Array.from(current.usernames),
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${SETTINGS_COLLECTION}/${DELETED_ACCOUNTS_DOC}`);
+  }
+}
+
+export async function removeAccountsFromDeletedTombstones(ids: string[], usernames: string[] = []): Promise<void> {
+  const current = getDeletedAccountTombstones();
+  ids.forEach((id) => current.ids.delete(id));
+  usernames.forEach((u) => current.usernames.delete(String(u).trim().toLowerCase()));
+  saveDeletedAccountTombstonesLocally(current.ids, current.usernames);
+
+  if (!db) return;
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, DELETED_ACCOUNTS_DOC);
+    await setDoc(
+      docRef,
+      {
+        ids: Array.from(current.ids),
+        usernames: Array.from(current.usernames),
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${SETTINGS_COLLECTION}/${DELETED_ACCOUNTS_DOC}`);
+  }
+}
+
+export async function clearDeletedAccountsTracking(): Promise<void> {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(DELETED_ACCOUNTS_KEY);
+    }
+    if (db) {
+      const docRef = doc(db, SETTINGS_COLLECTION, DELETED_ACCOUNTS_DOC);
+      await deleteDoc(docRef);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /**
- * Firestore Account Management
+ * Firestore Account Management with Real-Time Multi-Device Persistence
  */
+let initialAccountsCloudChecked = false;
+
 export function subscribeToAccounts(
   onUpdate: (accounts: AppAccount[]) => void,
   onError?: (err: Error) => void
@@ -360,49 +486,74 @@ export function subscribeToAccounts(
     return () => {};
   }
   try {
+    // 1. Subscribe to remote tombstones so all devices immediately know about deleted accounts
+    const tombstoneDocRef = doc(db, SETTINGS_COLLECTION, DELETED_ACCOUNTS_DOC);
+    const unsubTombstone = onSnapshot(
+      tombstoneDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const cloudIds: string[] = Array.isArray(data?.ids) ? data.ids : [];
+          const cloudUsers: string[] = Array.isArray(data?.usernames) ? data.usernames : [];
+          const current = getDeletedAccountTombstones();
+          cloudIds.forEach((id) => current.ids.add(id));
+          cloudUsers.forEach((u) => current.usernames.add(String(u).trim().toLowerCase()));
+          saveDeletedAccountTombstonesLocally(current.ids, current.usernames);
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, `${SETTINGS_COLLECTION}/${DELETED_ACCOUNTS_DOC}`);
+      }
+    );
+
+    // 2. Subscribe to accounts collection
     const colRef = collection(db, ACCOUNTS_COLLECTION);
-    const unsubscribe = onSnapshot(
+    const unsubAccounts = onSnapshot(
       colRef,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const remoteList: AppAccount[] = [];
-          snapshot.forEach((docSnap) => {
-            remoteList.push({ ...(docSnap.data() as AppAccount), id: docSnap.id });
-          });
+        const { ids: deletedIds, usernames: deletedUsernames } = getDeletedAccountTombstones();
 
-          // Upload any local account created offline
-          try {
-            const saved = typeof window !== 'undefined' ? localStorage.getItem('simrs_diklat_accounts_v2') : null;
-            if (saved) {
-              const localList: AppAccount[] = JSON.parse(saved);
-              if (Array.isArray(localList) && localList.length > 0) {
-                const remoteUsernames = new Set(remoteList.map((a) => a.username.toLowerCase()));
-                const unsynced = localList.filter((l) => !remoteUsernames.has(l.username.toLowerCase()));
-                if (unsynced.length > 0) {
-                  bulkUploadAccountsToFirebase(unsynced).catch(() => {});
-                  const merged = [...remoteList, ...unsynced];
-                  onUpdate(merged);
-                  return;
-                }
-              }
+        if (!snapshot.empty) {
+          initialAccountsCloudChecked = true;
+          const remoteList: AppAccount[] = [];
+          
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as AppAccount;
+            const docId = docSnap.id;
+            const accId = data.id || docId;
+            const normUser = (data.username || '').trim().toLowerCase();
+
+            // Strictly filter out any account that was deleted on any device
+            if (deletedIds.has(docId) || deletedIds.has(accId) || deletedUsernames.has(normUser)) {
+              return;
             }
-          } catch {
-            // ignore
-          }
+
+            remoteList.push({ ...data, id: docId });
+          });
 
           onUpdate(remoteList);
         } else {
-          // If remote accounts are empty, sync local accounts to cloud
-          try {
-            const saved = typeof window !== 'undefined' ? localStorage.getItem('simrs_diklat_accounts_v2') : null;
-            if (saved) {
-              const parsed = JSON.parse(saved);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                bulkUploadAccountsToFirebase(parsed);
+          // If remote accounts collection is completely empty:
+          if (!initialAccountsCloudChecked && deletedIds.size === 0 && deletedUsernames.size === 0) {
+            initialAccountsCloudChecked = true;
+            // Clean initial seed only when system has never had accounts or deletions
+            bulkUploadAccountsToFirebase([
+              {
+                id: 'usr-admin-01',
+                username: 'admin',
+                password: 'admin123',
+                name: 'Administrator Diklat',
+                role: 'Administrator Diklat',
+                authority: 'Otoritas Penuh',
+                nip: '19840315 200912 1 002',
+                unit: 'Bagian Pendidikan & Pelatihan (Diklat)',
+                email: 'adeirwanh4@gmail.com',
+                createdAt: new Date().toISOString(),
+                isDefault: true
               }
-            }
-          } catch {
-            // ignore
+            ]).catch(() => {});
+          } else {
+            onUpdate([]);
           }
         }
       },
@@ -411,7 +562,11 @@ export function subscribeToAccounts(
         if (onError) onError(error);
       }
     );
-    return unsubscribe;
+
+    return () => {
+      unsubTombstone();
+      unsubAccounts();
+    };
   } catch (err: any) {
     handleFirestoreError(err, OperationType.GET, ACCOUNTS_COLLECTION);
     if (onError) onError(err);
@@ -420,6 +575,8 @@ export function subscribeToAccounts(
 }
 
 export async function saveAccountToFirebase(account: AppAccount): Promise<boolean> {
+  // If re-saving an account, remove it from tombstones so it stays alive
+  await removeAccountsFromDeletedTombstones([account.id], [account.username]);
   if (!db) return false;
   try {
     const docRef = doc(db, ACCOUNTS_COLLECTION, account.id);
@@ -432,8 +589,10 @@ export async function saveAccountToFirebase(account: AppAccount): Promise<boolea
   }
 }
 
-export async function deleteAccountFromFirebase(accountId: string): Promise<boolean> {
-  if (!db) return false;
+export async function deleteAccountFromFirebase(accountId: string, username?: string): Promise<boolean> {
+  // 1. Record persistent tombstone across cloud and local storage
+  await markAccountsAsDeletedInFirebase([accountId], username ? [username] : []);
+  if (!db) return true;
   try {
     const docRef = doc(db, ACCOUNTS_COLLECTION, accountId);
     await deleteDoc(docRef);
@@ -444,16 +603,47 @@ export async function deleteAccountFromFirebase(accountId: string): Promise<bool
   }
 }
 
+export async function bulkDeleteAccountsFromFirebase(accountIds: string[], usernames: string[] = []): Promise<boolean> {
+  if (!accountIds || accountIds.length === 0) return true;
+  // 1. Record persistent tombstone across cloud and local storage
+  await markAccountsAsDeletedInFirebase(accountIds, usernames);
+  if (!db) return true;
+  try {
+    const BATCH_LIMIT = 400;
+    for (let i = 0; i < accountIds.length; i += BATCH_LIMIT) {
+      const chunk = accountIds.slice(i, i + BATCH_LIMIT);
+      const batch = writeBatch(db);
+      chunk.forEach((id) => {
+        const ref = doc(db, ACCOUNTS_COLLECTION, id);
+        batch.delete(ref);
+      });
+      await batch.commit();
+    }
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, ACCOUNTS_COLLECTION);
+    return false;
+  }
+}
+
 export async function bulkUploadAccountsToFirebase(accounts: AppAccount[]): Promise<boolean> {
   if (!db || accounts.length === 0) return true;
   try {
-    const batch = writeBatch(db);
-    accounts.forEach((acc) => {
-      const ref = doc(db, ACCOUNTS_COLLECTION, acc.id);
-      const cleaned = cleanFirestoreData(acc);
-      batch.set(ref, cleaned, { merge: true });
-    });
-    await batch.commit();
+    const ids = accounts.map((a) => a.id);
+    const usernames = accounts.map((a) => a.username);
+    await removeAccountsFromDeletedTombstones(ids, usernames);
+
+    const BATCH_LIMIT = 400;
+    for (let i = 0; i < accounts.length; i += BATCH_LIMIT) {
+      const chunk = accounts.slice(i, i + BATCH_LIMIT);
+      const batch = writeBatch(db);
+      chunk.forEach((acc) => {
+        const ref = doc(db, ACCOUNTS_COLLECTION, acc.id);
+        const cleaned = cleanFirestoreData(acc);
+        batch.set(ref, cleaned, { merge: true });
+      });
+      await batch.commit();
+    }
     return true;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, ACCOUNTS_COLLECTION);
@@ -481,7 +671,7 @@ export function subscribeToCustomUnits(
         }
       },
       (err) => {
-        console.warn('Custom units subscription notice:', err);
+        handleFirestoreError(err, OperationType.GET, `${SETTINGS_COLLECTION}/${CUSTOM_UNITS_DOC}`);
       }
     );
   } catch {
@@ -520,7 +710,7 @@ export function subscribeToPrintSigneeConfig(
         }
       },
       (err) => {
-        console.warn('Print signee subscription notice:', err);
+        handleFirestoreError(err, OperationType.GET, `${SETTINGS_COLLECTION}/${PRINT_SIGNEE_DOC}`);
       }
     );
   } catch {
@@ -540,7 +730,102 @@ export async function savePrintSigneeConfigToFirebase(config: PrintSigneeConfig)
   }
 }
 
+/**
+ * Global Theme Preset Cross-Device Cloud Sync
+ */
+export const THEME_CONFIG_DOC = 'app_theme_config';
+
+export function subscribeToThemeConfig(onUpdate: (themeId: string) => void): () => void {
+  if (!db) return () => {};
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, THEME_CONFIG_DOC);
+    return onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.themeId && typeof data.themeId === 'string') {
+            onUpdate(data.themeId);
+          }
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, `${SETTINGS_COLLECTION}/${THEME_CONFIG_DOC}`);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveThemeConfigToFirebase(themeId: string): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, THEME_CONFIG_DOC);
+    await setDoc(docRef, { themeId, updatedAt: new Date().toISOString() }, { merge: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Global Dynamic Background Wallpaper Cross-Device Cloud Sync
+ */
+export const BACKGROUND_CONFIG_DOC = 'app_background_config';
+
+export interface RemoteBackgroundConfig {
+  id: string;
+  name: string;
+  category: string;
+  type: string;
+  cssValue: string;
+  thumbnailUrl?: string;
+  overlayOpacity?: number;
+  blur?: number;
+  updatedAt?: string;
+}
+
+export function subscribeToBackgroundConfig(onUpdate: (bg: RemoteBackgroundConfig) => void): () => void {
+  if (!db) return () => {};
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, BACKGROUND_CONFIG_DOC);
+    return onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as RemoteBackgroundConfig;
+          if (data && data.id && data.cssValue) {
+            onUpdate(data);
+          }
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, `${SETTINGS_COLLECTION}/${BACKGROUND_CONFIG_DOC}`);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function saveBackgroundConfigToFirebase(bg: RemoteBackgroundConfig): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, BACKGROUND_CONFIG_DOC);
+    const cleaned = cleanFirestoreData({
+      ...bg,
+      updatedAt: new Date().toISOString()
+    });
+    await setDoc(docRef, cleaned, { merge: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const DELETED_EMPLOYEES_KEY = 'rsia_az_zahra_deleted_employees_v1';
+export const DELETED_EMPLOYEES_DOC = 'deleted_employees';
 
 export function getDeletedEmployeeIds(): Set<string> {
   try {
@@ -555,12 +840,32 @@ export function getDeletedEmployeeIds(): Set<string> {
   return new Set();
 }
 
+export function saveDeletedEmployeeIdsLocally(ids: Set<string>): void {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DELETED_EMPLOYEES_KEY, JSON.stringify(Array.from(ids)));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function markEmployeesAsDeleted(ids: string[]): void {
   try {
     const set = getDeletedEmployeeIds();
     ids.forEach((id) => set.add(id));
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(DELETED_EMPLOYEES_KEY, JSON.stringify(Array.from(set)));
+    saveDeletedEmployeeIdsLocally(set);
+
+    if (db) {
+      const docRef = doc(db, SETTINGS_COLLECTION, DELETED_EMPLOYEES_DOC);
+      setDoc(
+        docRef,
+        {
+          ids: Array.from(set),
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      ).catch(() => {});
     }
   } catch {
     // ignore
@@ -571,6 +876,10 @@ export function clearDeletedEmployeeTracking(): void {
   try {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(DELETED_EMPLOYEES_KEY);
+    }
+    if (db) {
+      const docRef = doc(db, SETTINGS_COLLECTION, DELETED_EMPLOYEES_DOC);
+      deleteDoc(docRef).catch(() => {});
     }
   } catch {
     // ignore
@@ -590,8 +899,27 @@ export function subscribeToEmployees(
     return () => {};
   }
   try {
+    // 1. Subscribe to remote tombstones so all devices immediately know about deleted employees
+    const tombstoneDocRef = doc(db, SETTINGS_COLLECTION, DELETED_EMPLOYEES_DOC);
+    const unsubTombstone = onSnapshot(
+      tombstoneDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const cloudIds: string[] = Array.isArray(data?.ids) ? data.ids : [];
+          const current = getDeletedEmployeeIds();
+          cloudIds.forEach((id) => current.add(id));
+          saveDeletedEmployeeIdsLocally(current);
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, `${SETTINGS_COLLECTION}/${DELETED_EMPLOYEES_DOC}`);
+      }
+    );
+
+    // 2. Subscribe to employees collection
     const colRef = collection(db, EMPLOYEES_COLLECTION);
-    const unsubscribe = onSnapshot(
+    const unsubEmployees = onSnapshot(
       colRef,
       (snapshot) => {
         const deletedIds = getDeletedEmployeeIds();
@@ -609,10 +937,33 @@ export function subscribeToEmployees(
           });
 
           onUpdate(remoteList);
+          const metaDocRef = doc(db, SETTINGS_COLLECTION, 'system_seed_status');
+          setDoc(metaDocRef, { employeesSeeded: true }, { merge: true }).catch(() => {});
         } else {
           // If cloud collection is completely empty:
-          initialEmployeesCloudChecked = true;
-          onUpdate([]);
+          if (!initialEmployeesCloudChecked) {
+            initialEmployeesCloudChecked = true;
+            const metaDocRef = doc(db, SETTINGS_COLLECTION, 'system_seed_status');
+            getDocFromServer(metaDocRef)
+              .then((snap) => {
+                if (snap.exists() && snap.data()?.employeesSeeded) {
+                  onUpdate([]);
+                } else {
+                  import('../utils/employeeManager').then(({ DEFAULT_EMPLOYEES }) => {
+                    bulkUploadEmployeesToFirebase(DEFAULT_EMPLOYEES).catch(() => {});
+                    setDoc(metaDocRef, { employeesSeeded: true }, { merge: true }).catch(() => {});
+                    onUpdate(DEFAULT_EMPLOYEES);
+                  }).catch(() => {
+                    onUpdate([]);
+                  });
+                }
+              })
+              .catch(() => {
+                onUpdate([]);
+              });
+          } else {
+            onUpdate([]);
+          }
         }
       },
       (error) => {
@@ -620,7 +971,10 @@ export function subscribeToEmployees(
         if (onError) onError(error);
       }
     );
-    return unsubscribe;
+    return () => {
+      unsubTombstone();
+      unsubEmployees();
+    };
   } catch (err: any) {
     handleFirestoreError(err, OperationType.GET, EMPLOYEES_COLLECTION);
     if (onError) onError(err);

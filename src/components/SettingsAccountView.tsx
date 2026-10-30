@@ -62,7 +62,8 @@ import {
   Layers,
   LayoutGrid,
   Sun,
-  Moon
+  Moon,
+  CheckSquare
 } from 'lucide-react';
 import { BackgroundSettingsTab } from './BackgroundSettingsTab';
 import { SettingsMenuHub, SettingsTabType } from './SettingsMenuHub';
@@ -90,8 +91,10 @@ import {
   resetAccountPassword, 
   updateAccount, 
   deleteAccount, 
+  bulkDeleteAccounts,
   resetAccountsToDefault,
-  onAccountsSync
+  onAccountsSync,
+  onAccountsChange
 } from '../utils/accountManager';
 import { 
   firebaseConfig, 
@@ -184,10 +187,16 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
 
   // Listen to remote account updates across devices in real-time
   useEffect(() => {
-    const unsub = onAccountsSync((synced) => {
+    const unsubSync = onAccountsSync((synced) => {
       setAccounts(synced);
     });
-    return () => unsub();
+    const unsubChange = onAccountsChange((synced) => {
+      setAccounts(synced);
+    });
+    return () => {
+      unsubSync();
+      unsubChange();
+    };
   }, []);
 
   // Listen to theme changes
@@ -212,6 +221,10 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [authorityFilter, setAuthorityFilter] = useState<string>('all');
+
+  // Batch Selection State for Accounts (Hapus lebih dari 1)
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState<boolean>(false);
 
   // Form State: Tambah Akun
   const [newUsername, setNewUsername] = useState<string>('');
@@ -313,6 +326,49 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
       return matchSearch && matchRole && matchAuthority;
     });
   }, [accounts, searchQuery, roleFilter, authorityFilter]);
+
+  // Non-root admin accounts eligible for batch selection and deletion
+  const selectableAccounts = useMemo(() => {
+    return filteredAccounts.filter((a) => a.username !== 'admin');
+  }, [filteredAccounts]);
+
+  const isAllAccountsSelected = useMemo(() => {
+    return selectableAccounts.length > 0 && selectableAccounts.every((a) => selectedAccountIds.includes(a.id));
+  }, [selectableAccounts, selectedAccountIds]);
+
+  const handleToggleSelectAllAccounts = () => {
+    if (isAllAccountsSelected) {
+      setSelectedAccountIds([]);
+    } else {
+      setSelectedAccountIds(selectableAccounts.map((a) => a.id));
+    }
+  };
+
+  const handleToggleSelectAccount = (id: string) => {
+    setSelectedAccountIds((prev) => 
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleExecuteBatchDeleteAccounts = () => {
+    if (selectedAccountIds.length === 0) return;
+    const res = bulkDeleteAccounts(selectedAccountIds);
+    if (res.success) {
+      setSelectedAccountIds([]);
+      setShowBatchDeleteModal(false);
+      refreshAccounts();
+      setActionFeedback({
+        type: 'success',
+        message: `${res.message} Akun yang dihapus tidak akan muncul kembali di perangkat manapun.`
+      });
+    } else {
+      setActionFeedback({
+        type: 'error',
+        message: res.message
+      });
+      setShowBatchDeleteModal(false);
+    }
+  };
 
   // Statistics across exact 3 authorities
   const accountStats = useMemo(() => {
@@ -593,10 +649,11 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
     const target = deleteConfirmAccount;
     const res = deleteAccount(target.id);
     if (res.success) {
+      setSelectedAccountIds((prev) => prev.filter((id) => id !== target.id));
       refreshAccounts();
       setActionFeedback({
         type: 'success',
-        message: `Akun @${target.username} (${target.name}) berhasil dihapus dari sistem.`
+        message: `Akun @${target.username} (${target.name}) berhasil dihapus permanen dari sistem dan cloud database.`
       });
       setDeleteConfirmAccount(null);
     } else {
@@ -646,6 +703,12 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
           bg: 'bg-cyan-950/60 text-cyan-300 border-cyan-800/80',
           dot: 'bg-cyan-400',
           border: 'border-cyan-500/30'
+        };
+      case 'Nursing Struktural':
+        return {
+          bg: 'bg-indigo-950/60 text-indigo-300 border-indigo-800/80',
+          dot: 'bg-indigo-400',
+          border: 'border-indigo-500/30'
         };
       case 'Peserta Diklat':
       default:
@@ -1021,6 +1084,7 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
                               <option value="Administrator Diklat">Administrator Diklat</option>
                               <option value="Koordinator Preceptor">Koordinator Preceptor</option>
                               <option value="Instruktur Klinis">Instruktur Klinis</option>
+                              <option value="Nursing Struktural">Nursing Struktural</option>
                               <option value="Peserta Diklat">Peserta Diklat</option>
                             </select>
                             <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
@@ -1410,6 +1474,7 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
                   <option value="Administrator Diklat">Administrator Diklat</option>
                   <option value="Koordinator Preceptor">Koordinator Preceptor</option>
                   <option value="Instruktur Klinis">Instruktur Klinis</option>
+                  <option value="Nursing Struktural">Nursing Struktural</option>
                   <option value="Peserta Diklat">Peserta Diklat</option>
                 </select>
               </div>
@@ -1441,12 +1506,61 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
               </div>
             </div>
 
+            {/* Batch Action Toolbar when multiple accounts are selected */}
+            {selectedAccountIds.length > 0 && isFullAuthority(currentUser) && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-rose-950/90 via-rose-900/50 to-slate-900 border border-rose-500/50 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-rose-600/30 border border-rose-500/50 flex items-center justify-center text-rose-300 shrink-0">
+                    <CheckSquare className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                      <span>{selectedAccountIds.length} Akun Dipilih</span>
+                      <span className="text-[10px] text-rose-300 font-normal hidden sm:inline">(Aksi Massal)</span>
+                    </span>
+                    <p className="text-[10px] text-rose-300">
+                      Penghapusan akan langsung disinkronkan ke cloud database &amp; berlaku di seluruh perangkat
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAccountIds([])}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Batal Pilih
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchDeleteModal(true)}
+                    className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 border border-rose-500/80 flex items-center gap-1.5 transition-all shadow-md shadow-rose-950 cursor-pointer active:scale-95"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus {selectedAccountIds.length} Akun Terpilih</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Elegant Accounts Table */}
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur-md">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-950/90 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                     <tr>
+                      <th className="py-3.5 px-3 sm:px-4 w-10 text-center">
+                        {isFullAuthority(currentUser) && (
+                          <input
+                            type="checkbox"
+                            checked={isAllAccountsSelected}
+                            onChange={handleToggleSelectAllAccounts}
+                            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500/20 cursor-pointer"
+                            title="Pilih / Batalkan Semua Akun (Kecuali Super Admin)"
+                          />
+                        )}
+                      </th>
                       <th className="py-3.5 px-4 sm:px-6">Pengguna & Kredensial</th>
                       <th className="py-3.5 px-4">Otoritas User</th>
                       <th className="py-3.5 px-4">Peran & Unit Kerja</th>
@@ -1457,7 +1571,7 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
                   <tbody className="divide-y divide-slate-800/60 text-slate-200">
                     {filteredAccounts.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-16 text-center text-slate-500">
+                        <td colSpan={6} className="py-16 text-center text-slate-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <Users className="w-8 h-8 text-slate-600" />
                             <p className="text-sm font-bold text-slate-300">Tidak ada akun yang sesuai kriteria</p>
@@ -1487,6 +1601,21 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
 
                         return (
                           <tr key={acc.id} className="hover:bg-slate-850/40 transition-colors group">
+                            {/* Column 0: Checkbox */}
+                            <td className="py-3.5 px-3 sm:px-4 text-center">
+                              {isFullAuthority(currentUser) && !isRootAdmin ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAccountIds.includes(acc.id)}
+                                  onChange={() => handleToggleSelectAccount(acc.id)}
+                                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500/20 cursor-pointer"
+                                  title={`Pilih @${acc.username}`}
+                                />
+                              ) : (
+                                <span className="text-slate-700 text-xs">-</span>
+                              )}
+                            </td>
+
                             {/* Column 1: User & Avatar */}
                             <td className="py-3.5 px-4 sm:px-6">
                               <div className="flex items-center gap-3">
@@ -3529,6 +3658,7 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
                     <option value="Administrator Diklat">Administrator Diklat</option>
                     <option value="Koordinator Preceptor">Koordinator Preceptor</option>
                     <option value="Instruktur Klinis">Instruktur Klinis</option>
+                    <option value="Nursing Struktural">Nursing Struktural</option>
                     <option value="Peserta Diklat">Peserta Diklat</option>
                   </select>
                 </div>
@@ -3734,6 +3864,85 @@ export const SettingsAccountView: React.FC<SettingsAccountViewProps> = ({
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Ya, Hapus Akun Ini</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: KONFIRMASI HAPUS MASSAL AKUN (BATCH DELETE)
+      ======================================================== */}
+      {showBatchDeleteModal && selectedAccountIds.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            onClick={() => setShowBatchDeleteModal(false)}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+          />
+          <div className="relative w-full max-w-lg rounded-2xl bg-slate-900 border border-rose-800/80 p-6 shadow-2xl text-slate-100 z-10 space-y-4">
+            <div className="flex items-center gap-3 text-rose-400 border-b border-slate-800 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-950 flex items-center justify-center border border-rose-800/60 shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Hapus Massal Akun Pengguna</h3>
+                <p className="text-xs text-rose-300">
+                  Konfirmasi penghapusan permanen {selectedAccountIds.length} akun terpilih
+                </p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                Anda akan menghapus <strong className="text-white font-bold">{selectedAccountIds.length} akun pengguna</strong> berikut dari sistem SIMRS Diklat RSIA Az Zahra:
+              </p>
+
+              {/* Scrollable list of selected accounts */}
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                {accounts
+                  .filter((a) => selectedAccountIds.includes(a.id))
+                  .map((acc) => (
+                    <div
+                      key={acc.id}
+                      className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-bold text-white truncate">{acc.name}</div>
+                        <div className="text-[11px] font-mono text-cyan-400">@{acc.username}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${getRoleBadgeStyle(acc.role).bg}`}>
+                          {acc.role}
+                        </span>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{acc.unit}</div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-900/60 text-rose-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span className="text-[11px] leading-tight">
+                  Tindakan ini berlaku permanen di Cloud Firestore &amp; seluruh perangkat. Akun yang telah dihapus tidak akan muncul kembali saat sistem dibuka di HP, laptop, maupun browser lain.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowBatchDeleteModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteBatchDeleteAccounts}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition-colors cursor-pointer shadow-lg shadow-rose-950 active:scale-95 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus {selectedAccountIds.length} Akun Sekarang</span>
               </button>
             </div>
           </div>

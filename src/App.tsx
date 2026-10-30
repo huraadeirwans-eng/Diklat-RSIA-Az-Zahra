@@ -47,11 +47,12 @@ import { startRealtimeCustomUnitsSync } from './utils/unitManager';
 import { getAllEmployees, startRealtimeEmployeeSync, onEmployeesChange } from './utils/employeeManager';
 import { startRealtimePrintSigneeSync } from './utils/printConfigManager';
 import { exportCompleteAgendaToExcel } from './utils/excelExporter';
-import { applyThemeToDOM, getActiveTheme, onThemeChange, ThemePreset } from './utils/themeManager';
+import { applyThemeToDOM, getActiveTheme, onThemeChange, startRealtimeThemeSync, ThemePreset } from './utils/themeManager';
 import { 
   applyBackgroundToDOM, 
   getActiveBackground, 
   onBackgroundChange, 
+  startRealtimeBackgroundSync,
   AppBackground 
 } from './utils/backgroundManager';
 import { 
@@ -255,6 +256,8 @@ export default function App() {
     const unsubUnits = startRealtimeCustomUnitsSync();
     const unsubEmployees = startRealtimeEmployeeSync();
     const unsubPrintSignee = startRealtimePrintSigneeSync();
+    const unsubThemeSync = startRealtimeThemeSync();
+    const unsubBgSync = startRealtimeBackgroundSync();
 
     return () => {
       unsubTheme();
@@ -264,6 +267,8 @@ export default function App() {
       if (unsubUnits) unsubUnits();
       if (unsubEmployees) unsubEmployees();
       if (unsubPrintSignee) unsubPrintSignee();
+      if (unsubThemeSync) unsubThemeSync();
+      if (unsubBgSync) unsubBgSync();
     };
   }, []);
 
