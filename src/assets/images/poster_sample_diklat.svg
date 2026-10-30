@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 850" width="600" height="850">
+  <defs>
+    <linearGradient id="posterBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#091428"/>
+      <stop offset="40%" stop-color="#0f2b48"/>
+      <stop offset="100%" stop-color="#040b17"/>
+    </linearGradient>
+    <linearGradient id="accentCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="badgeAmber" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="850" fill="url(#posterBg)"/>
+  
+  <!-- Geometric Tech Accents -->
+  <circle cx="550" cy="80" r="140" fill="#06b6d4" opacity="0.08"/>
+  <circle cx="50" cy="780" r="180" fill="#f59e0b" opacity="0.06"/>
+  <path d="M0 0 L240 0 L180 80 L0 80 Z" fill="#08203e" opacity="0.5"/>
+
+  <!-- Top Badge -->
+  <rect x="40" y="45" width="220" height="32" rx="16" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="150" y="66" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#38bdf8" text-anchor="middle" letter-spacing="1.5">
+    PELATIHAN EKSTERNAL 2026
+  </text>
+
+  <!-- Main Headline -->
+  <text x="40" y="145" font-family="system-ui, sans-serif" font-size="34" font-weight="900" fill="#ffffff" letter-spacing="-0.5">
+    SIMPOSIUM &amp; WORKSHOP
+  </text>
+  <text x="40" y="185" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="url(#accentCyan)">
+    AKREDITASI &amp; MUTU RUMAH SAKIT
+  </text>
+  <text x="40" y="215" font-family="system-ui, sans-serif" font-size="15" fill="#94a3b8">
+    Standar Pelayanan Klinis Paripurna &amp; Keselamatan Pasien Terpadu
+  </text>
+
+  <!-- Visual Card Banner -->
+  <rect x="40" y="245" width="520" height="190" rx="18" fill="#031124" stroke="#1e3a5f" stroke-width="2"/>
+  <rect x="60" y="265" width="480" height="35" rx="8" fill="#08203e"/>
+  <text x="80" y="288" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" fill="#f8fafc">
+    Narasumber / Keynote Speaker Nasional
+  </text>
+  
+  <text x="80" y="335" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#ffffff">
+    Dewan Pakar Akreditasi KARS &amp; Kemenkes RI
+  </text>
+  <text x="80" y="360" font-family="system-ui, sans-serif" font-size="13" fill="#38bdf8">
+    Fasilitator Utama Standar Keselamatan Pasien &amp; Tata Kelola Mutu
+  </text>
+  <text x="80" y="405" font-family="system-ui, sans-serif" font-size="12" fill="#cbd5e1">
+    Fasilitas: Sertifikat Terakreditasi SKP Kemenkes · Materi Modul · Ujian Pre-Post Test
+  </text>
+
+  <!-- Detail Highlights (Date, Time, Venue) -->
+  <rect x="40" y="460" width="520" height="150" rx="16" fill="#0a1d37" stroke="#334155" stroke-width="1.5"/>
+  
+  <!-- Date item -->
+  <text x="70" y="500" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#94a3b8" letter-spacing="1">
+    WAKTU PELAKSANAAN
+  </text>
+  <text x="70" y="528" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">
+    Sesuai Jadwal Kalender Terdaftar
+  </text>
+  <text x="70" y="550" font-family="system-ui, sans-serif" font-size="13" fill="#38bdf8">
+    08.00 - 16.00 WIB (6 JP / Satuan Kredit Partisipasi)
+  </text>
+
+  <line x1="70" y1="565" x2="530" y2="565" stroke="#1e293b" stroke-width="1"/>
+
+  <text x="70" y="590" font-family="system-ui, sans-serif" font-size="13" fill="#cbd5e1">
+    Lokasi: <tspan fill="#f59e0b" font-weight="bold">Auditorium Eksternal &amp; Akses Hybrid Interaktif</tspan>
+  </text>
+
+  <!-- Call to action footer -->
+  <rect x="40" y="635" width="520" height="70" rx="14" fill="url(#badgeAmber)"/>
+  <text x="300" y="675" font-family="system-ui, sans-serif" font-size="18" font-weight="900" fill="#0f172a" text-anchor="middle" letter-spacing="0.5">
+    KUOTA TERBATAS · DAFTARKAN UNIT ANDA SEKARANG
+  </text>
+
+  <text x="300" y="740" font-family="system-ui, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">
+    Penyelenggara: Komite Diklat &amp; Pengembangan SDM RSIA AZ Palembang
+  </text>
+  <text x="300" y="760" font-family="system-ui, sans-serif" font-size="11" fill="#475569" text-anchor="middle">
+    Informasi &amp; Verifikasi: diklat@rsia-az.co.id · SIMRS Diklat Terintegrasi
+  </text>
+</svg>

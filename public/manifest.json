@@ -1,0 +1,49 @@
+{
+  "id": "com.rsia.diklat",
+  "name": "Kalender Diklat RSIA Az Zahra",
+  "short_name": "Diklat RSIA",
+  "description": "Sistem Informasi Manajemen Kalender Pelatihan & Presensi Diklat RSIA Az Zahra Palembang.",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "categories": ["medical", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Kalender Pelatihan",
+      "short_name": "Kalender",
+      "description": "Buka kalender jadwal pelatihan rumah sakit",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

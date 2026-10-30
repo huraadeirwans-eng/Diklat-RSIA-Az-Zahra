@@ -1,0 +1,20 @@
+{
+  "firestore": {
+    "database": "ai-studio-kalenderpelatiha-170cc39b-8ea5-438a-b8f7-fec1a6eb47d7",
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

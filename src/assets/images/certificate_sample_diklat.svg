@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700">
+  <defs>
+    <linearGradient id="certBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a192f"/>
+      <stop offset="50%" stop-color="#0f2b48"/>
+      <stop offset="100%" stop-color="#081426"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="50%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer Background -->
+  <rect width="1000" height="700" fill="url(#certBg)"/>
+  
+  <!-- Border Frames -->
+  <rect x="25" y="25" width="950" height="650" fill="none" stroke="url(#goldGrad)" stroke-width="4" rx="16"/>
+  <rect x="40" y="40" width="920" height="620" fill="none" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="6,4" rx="12"/>
+  
+  <!-- Hospital / Org Emblem Header -->
+  <circle cx="500" cy="115" r="42" fill="#0f2b48" stroke="url(#goldGrad)" stroke-width="3"/>
+  <path d="M500 90 L515 110 L540 115 L522 130 L527 155 L500 142 L473 155 L478 130 L460 115 L485 110 Z" fill="url(#goldGrad)"/>
+  
+  <!-- Title Texts -->
+  <text x="500" y="195" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="800" fill="#f8fafc" text-anchor="middle" letter-spacing="4">
+    SERTIFIKAT PELATIHAN EKSTERNAL
+  </text>
+  <text x="500" y="225" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#94a3b8" text-anchor="middle" letter-spacing="2">
+    NOMOR REGISTRASI: SERT-EKS/2026/RSIA-AZ/0894
+  </text>
+  
+  <text x="500" y="275" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#cbd5e1" text-anchor="middle">
+    Diberikan dengan hormat kepada:
+  </text>
+  
+  <text x="500" y="325" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle">
+    PESERTA PELATIHAN PROFESIONAL
+  </text>
+  
+  <line x1="300" y1="345" x2="700" y2="345" stroke="#334155" stroke-width="2"/>
+  
+  <text x="500" y="390" font-family="system-ui, -apple-system, sans-serif" font-size="15" fill="#e2e8f0" text-anchor="middle" width="700">
+    Atas partisipasi aktif dan kelulusan kompetensi dalam agenda pelatihan terakreditasi:
+  </text>
+  
+  <rect x="200" y="415" width="600" height="60" fill="#031124" stroke="#0284c7" stroke-width="1.5" rx="10"/>
+  <text x="500" y="452" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#38bdf8" text-anchor="middle">
+    STANDARISASI &amp; SERTIFIKASI KOMPETENSI EKSTERNAL
+  </text>
+  
+  <text x="500" y="515" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">
+    Telah memenuhi standar evaluasi pre-test &amp; post-test dengan predikat SANGAT MEMUASKAN
+  </text>
+  
+  <!-- Signatures -->
+  <line x1="180" y1="600" x2="380" y2="600" stroke="#64748b" stroke-width="1.5"/>
+  <text x="280" y="620" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#f8fafc" text-anchor="middle">
+    Direktur Penyelenggara
+  </text>
+  <text x="280" y="638" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">
+    Lembaga Akreditasi Nasional
+  </text>
+  
+  <line x1="620" y1="600" x2="820" y2="600" stroke="#64748b" stroke-width="1.5"/>
+  <text x="720" y="620" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#f8fafc" text-anchor="middle">
+    Kepala Bagian Diklat
+  </text>
+  <text x="720" y="638" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">
+    RSIA AZ &amp; Unit Mitra
+  </text>
+</svg>

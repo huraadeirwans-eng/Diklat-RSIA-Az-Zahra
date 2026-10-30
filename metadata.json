@@ -1,0 +1,8 @@
+{
+  "name": "Kalender Pelatihan Coorporate \u0026 Kehadiran",
+  "description": "Sistem Kalender Pelatihan Profesional dan Aerodinamis dengan penelusuran jadwal per tanggal dan rincian peserta serta unit kerja.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "Training": {
+      "title": "Training",
+      "description": "Jadwal dan rincian pelatihan rumah sakit / korporat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "instructor": { "type": "string" },
+        "instructorTitle": { "type": "string" },
+        "instructorAvatar": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "room": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string" },
+        "scope": { "type": "string" },
+        "targetUnits": { "type": "array" },
+        "participants": { "type": "array" }
+      },
+      "required": ["id", "title", "date", "status"]
+    },
+    "AppAccount": {
+      "title": "AppAccount",
+      "description": "Akun login pengguna SIMRS Diklat & Hak Akses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string" },
+        "unit": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "username", "role"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Master Data Pegawai, Perawat, dan Bidan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "idKaryawan": { "type": "string" },
+        "jabatan": { "type": "string" },
+        "unitKerja": { "type": "string" }
+      },
+      "required": ["id", "name", "idKaryawan", "unitKerja"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Pengaturan sistem, unit kerja kustom, dan format cetak",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "units": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Catatan log perubahan sistem",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/trainings/{trainingId}": {
+      "schema": "Training",
+      "description": "Koleksi jadwal dan data pelatihan"
+    },
+    "/accounts/{accountId}": {
+      "schema": "AppAccount",
+      "description": "Koleksi akun pengguna sistem"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Koleksi master data tenaga medis dan pegawai"
+    },
+    "/settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Koleksi pengaturan kustom dan format dokumen"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Koleksi log audit keamanan"
+    }
+  }
+}
